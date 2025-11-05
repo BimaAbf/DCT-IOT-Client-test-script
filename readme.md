@@ -2,7 +2,7 @@
 
 ## Overview
 
-`tmux.sh` orchestrates multiple `client.py` instances inside a dedicated tmux session. It provides both a one-shot CLI and an interactive shell so you can start, monitor, restart, and introspect each client window without memorising raw tmux commands. Supporting utilities include live log capture, packet sniffing via `tcpdump`, and network emulation overlays through `tc netem` profiles.
+`clientmgr.sh` orchestrates multiple `client.py` instances inside a dedicated tmux session. It provides both a one-shot CLI and an interactive shell so you can start, monitor, restart, and introspect each client window without memorising raw tmux commands. Supporting utilities include live log capture, packet sniffing via `tcpdump`, and network emulation overlays through `tc netem` profiles.
 
 ```
            ____  _   _ _____     ___ ___ _____
@@ -25,22 +25,22 @@
 
 ```bash
 # Start all configured clients (uses CLIENTS array or active config)
-./tmux.sh start
+./clientmgr.sh start
 
 # Run the entire script under sudo (preserves key env overrides)
-./tmux.sh --super start
+./clientmgr.sh --super start
 
 # Attach to the tmux session to watch panes live
-./tmux.sh attach
+./clientmgr.sh attach
 
 # Stop every client and clean up
-./tmux.sh stop
+./clientmgr.sh stop
 ```
 
 No CLI arguments launches the interactive shell:
 
 ```bash
-./tmux.sh
+./clientmgr.sh
 ```
 
 Inside the shell type `help` to list commands, then `exit` when you are done.
@@ -72,11 +72,11 @@ The shell mirrors the CLI features and adds contextual feedback. Commands accept
 Pane output can be piped into timestamped log files.
 
 ```bash
-./tmux.sh logs enable               # auto-creates logs/<session>/<stamp>/
-./tmux.sh logs enable /tmp/mylogs    # custom directory
-./tmux.sh logs status                # show file paths for each window
-./tmux.sh logs path client_2         # print the path for a specific window
-./tmux.sh logs disable               # stop piping output
+./clientmgr.sh logs enable               # auto-creates logs/<session>/<stamp>/
+./clientmgr.sh logs enable /tmp/mylogs    # custom directory
+./clientmgr.sh logs status                # show file paths for each window
+./clientmgr.sh logs path client_2         # print the path for a specific window
+./clientmgr.sh logs disable               # stop piping output
 ```
 
 Logs are stored under `LOG_ROOT/<session>/<timestamp>/client_<seed>.log`. When the tmux session stops, logging automatically tears down.
@@ -89,16 +89,16 @@ You can launch or arm a background `tcpdump` capture tied to the current session
 
 ```bash
 # Arm tcpdump so it starts automatically when clients launch
-./tmux.sh tcpdump enable eth0 port 5000
-./tmux.sh start
+./clientmgr.sh tcpdump enable eth0 port 5000
+./clientmgr.sh start
 
 # Start immediately (use sudo or setcap if your user lacks capture privileges)
-sudo ./tmux.sh tcpdump start eth0 --output ./captures/run.pcap port 80
+sudo ./clientmgr.sh tcpdump start eth0 --output ./captures/run.pcap port 80
 
 # Inspect and stop
-./tmux.sh tcpdump status
-./tmux.sh tcpdump stop           # keeps the configuration armed
-./tmux.sh tcpdump disable        # stop and forget the configuration
+./clientmgr.sh tcpdump status
+./clientmgr.sh tcpdump stop           # keeps the configuration armed
+./clientmgr.sh tcpdump disable        # stop and forget the configuration
 ```
 
 State is persisted to `logs/tcpdump/<session>.state`, so arming and status survive script restarts. Armed captures are started automatically the next time clients spin up, while `tcpdump disable` clears the configuration altogether.
@@ -108,7 +108,7 @@ State is persisted to `logs/tcpdump/<session>.state`, so arming and status survi
 To avoid sprinkling `sudo` across subsequent subcommands, you can start the script with `--super`:
 
 ```bash
-./tmux.sh --super tcpdump enable eth0 port 5000
+./clientmgr.sh --super tcpdump enable eth0 port 5000
 ```
 
 The script re-executes itself under sudo while preserving key environment overrides, so subsequent interactive commands inherit the elevated context.
@@ -118,12 +118,12 @@ The script re-executes itself under sudo while preserving key environment overri
 Netem overlays apply latency, jitter, or packet loss to a chosen interface using `tc`. Set the default interface once, then apply profiles as needed.
 
 ```bash
-sudo ./tmux.sh netem use eth0
-sudo ./tmux.sh netem apply test1 2%                   # lossy profile
-sudo ./tmux.sh netem apply test2 100ms 40ms normal    # delay + jitter profile
-sudo ./tmux.sh netem apply custom delay 50ms          # pass raw tc netem args
-./tmux.sh netem status
-sudo ./tmux.sh netem clear                            # remove qdisc
+sudo ./clientmgr.sh netem use eth0
+sudo ./clientmgr.sh netem apply test1 2%                   # lossy profile
+sudo ./clientmgr.sh netem apply test2 100ms 40ms normal    # delay + jitter profile
+sudo ./clientmgr.sh netem apply custom delay 50ms          # pass raw tc netem args
+./clientmgr.sh netem status
+sudo ./clientmgr.sh netem clear                            # remove qdisc
 ```
 
 Netem state is tracked in `logs/netem/<session>.state`. The script prevents switching sessions while an overlay is active to avoid leaving qdiscs behind.
@@ -144,9 +144,9 @@ You can describe clients in JSON instead of editing the script. Example file (`c
 Load it at runtime:
 
 ```bash
-./tmux.sh --config ./clients.json start
-./tmux.sh config show
-./tmux.sh config clear
+./clientmgr.sh --config ./clients.json start
+./clientmgr.sh config show
+./clientmgr.sh config clear
 ```
 
 The loader validates required fields and falls back to the built-in defaults if you clear the active configuration.
@@ -170,7 +170,7 @@ The loader validates required fields and falls back to the built-in defaults if 
 Use standard shell syntax to override:
 
 ```bash
-LOG_ROOT=/var/log/clients SESSION_NAME=demo ./tmux.sh start
+LOG_ROOT=/var/log/clients SESSION_NAME=demo ./clientmgr.sh start
 ```
 
 ## Example Workflows
@@ -178,36 +178,36 @@ LOG_ROOT=/var/log/clients SESSION_NAME=demo ./tmux.sh start
 ### 1. Smoke Test a New Build
 
 ```bash
-./tmux.sh start
-./tmux.sh attach             # monitor behaviour
-./tmux.sh logs enable        # capture evidence
-./tmux.sh status             # confirm every pane is running
-./tmux.sh stop
+./clientmgr.sh start
+./clientmgr.sh attach             # monitor behaviour
+./clientmgr.sh logs enable        # capture evidence
+./clientmgr.sh status             # confirm every pane is running
+./clientmgr.sh stop
 ```
 
 ### 2. Investigate Packet Loss
 
 ```bash
-sudo ./tmux.sh netem use eth0
-sudo ./tmux.sh netem apply test1 10%
-./tmux.sh logs enable
-./tmux.sh tcpdump enable eth0 port 5000
-./tmux.sh start
-./tmux.sh attach
+sudo ./clientmgr.sh netem use eth0
+sudo ./clientmgr.sh netem apply test1 10%
+./clientmgr.sh logs enable
+./clientmgr.sh tcpdump enable eth0 port 5000
+./clientmgr.sh start
+./clientmgr.sh attach
 # observe clients under loss conditions
-./tmux.sh tcpdump stop
-sudo ./tmux.sh netem clear
-./tmux.sh stop
+./clientmgr.sh tcpdump stop
+sudo ./clientmgr.sh netem clear
+./clientmgr.sh stop
 ```
 
 ### 3. Rolling Restart with Logs
 
 ```bash
-./tmux.sh start
-./tmux.sh logs enable
-./tmux.sh restart client_2   # or ./tmux.sh restart 2
-./tmux.sh logs path client_2
-./tmux.sh stop
+./clientmgr.sh start
+./clientmgr.sh logs enable
+./clientmgr.sh restart client_2   # or ./clientmgr.sh restart 2
+./clientmgr.sh logs path client_2
+./clientmgr.sh stop
 ```
 
 ## State Files and Cleanup
